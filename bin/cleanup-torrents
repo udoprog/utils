@@ -1,0 +1,126 @@
+# Copyright 2014 John-John Tedro
+# Released under the Creative Commons CC0 License (Public Domain Dedication).
+#!/usr/bin/env python
+
+import bencode
+import glob
+import sys
+import os
+import shutil
+
+
+def read_torrents(directory):
+    path = os.path.join(directory, '*.torrent')
+
+    for p in glob.glob(path):
+        with open(p) as f:
+            torrent = bencode.bdecode(f.read())
+            download_path = torrent['info']['name']
+            yield p, torrent, download_path
+
+
+def list_entities(directory):
+    return (os.path.join(directory, e) for e in os.listdir(directory))
+
+
+def find_downloads(download_root, torrents):
+    downloads = {}
+
+    for (path, torrent, path) in torrents:
+        download_path = os.path.join(download_root, path)
+
+        check = os.path.isdir
+
+        # torrent is just a single file.
+        if 'files' not in torrent['info']:
+            check = os.path.isfile
+
+        if not check(download_path):
+            print "Missing download:", download_path
+            continue
+
+        downloads[download_path] = (path, torrent)
+
+    return downloads
+
+
+def find_removal(entities, downloads):
+    for path in entities:
+        d = downloads.get(path)
+
+        if d is not None:
+            continue
+
+        if os.path.isfile(path):
+            yield "file", path
+        elif os.path.isdir(path):
+            if os.path.islink(path):
+                yield "link", path
+            else:
+                yield "dir", path
+        else:
+            yield "unknown", path
+
+
+def remove_entities(entities):
+    for kind, path in entities:
+        if kind == "dir":
+            print "rmtree", path
+            shutil.rmtree(path)
+
+        if kind in ("file", "link"):
+            print "unlink", path
+            os.unlink(path)
+
+
+def main(args):
+    if len(args) != 2:
+        print """
+Usage: cleanup-torrents <download-directory> <torrent-directory>
+
+Will attempt to read all *.torrent files from <torrent-directory> and remove
+any files from <download-directory> that has no associated torrent.
+
+Example: cleanup-torrents /downloads ./torrents
+"""
+        return 1
+
+    download_root = os.path.abspath(args[0])
+    torrent_root = args[1]
+
+    if not os.path.isdir(download_root):
+        print "Not a directory:", download_root
+        return 1
+
+    if not os.path.isdir(torrent_root):
+        print "Not a directory:", torrent_root
+        return 1
+
+    entities = list_entities(download_root)
+    torrents = list(read_torrents(torrent_root))
+
+    if len(torrents) == 0:
+        print "No torrents found, bailing out."
+        return 1
+
+    downloads = find_downloads(download_root, torrents)
+    remove = list(find_removal(entities, downloads))
+
+    if len(remove) != 0:
+        for kind, path in remove:
+            print "remove: {} {}".format(kind, path)
+
+        res = raw_input("If this is OK, type 'yes': ").strip()
+
+        if res != "yes":
+            print "You did not type 'yes', aborting!"
+            return 1
+
+        remove_entities(remove)
+
+    print "Everything clean!"
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
