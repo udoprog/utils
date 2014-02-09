@@ -1,6 +1,6 @@
+#!/usr/bin/env python
 # Copyright 2014 John-John Tedro
 # Released under the Creative Commons CC0 License (Public Domain Dedication).
-#!/usr/bin/env python
 
 import bencode
 import glob
