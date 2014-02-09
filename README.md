@@ -1,4 +1,4 @@
-# utils - Random utility functions I made that I found useful.
+# utils
 
 This is a repository containing small utility functions that I made because
 I found them useful.
